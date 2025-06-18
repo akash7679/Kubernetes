@@ -1,0 +1,185 @@
+// Jenkins Display Name
+currentBuild.displayName = "$ENVIRONMENT-$MICROSERVICES-$TAG-#"+currentBuild.number
+
+// Initialize with default values
+def KUBE_CONFIG = env.ENVIRONMENT
+def AWS_ENV    = env.ENVIRONMENT
+def BRANCH     = env.ENVIRONMENT
+REGION         = getRegion(ENVIRONMENT)
+
+// Region Resolution Function
+def getRegion(env) {
+  return (env == 'dr') ? 'us-west-2' : 'us-east-1'
+}
+
+// Branch Resolution
+if (env.ENVIRONMENT =~ "prod[a-z]*[A-B]") {
+  BRANCH = "master"
+} else if (env.ENVIRONMENT == "dr") {
+  BRANCH = "master"
+} else if (env.ENVIRONMENT =~ "accp[a-z]*[A-Z]") {
+  BRANCH = "accp"
+} else if (env.ENVIRONMENT =~ "intg[a-z]*[A-Z]") {
+  BRANCH = "intg"
+} else if (env.ENVIRONMENT =~ "dev[a-z]*[A-Z]") {
+  BRANCH = "dev"
+}
+
+// Kubeconfig Mapping
+if (env.ENVIRONMENT =~ "prod[a-z]*[A-Z]") {
+  KUBE_CONFIG = "prod"
+} else if (env.ENVIRONMENT =~ "accp[a-z]*[A-Z]") {
+  KUBE_CONFIG = "accp"
+} else if (env.ENVIRONMENT =~ "intg[a-z]*[A-Z]") {
+  KUBE_CONFIG = "intg"
+} else if (env.ENVIRONMENT =~ "dev[a-z]*[A-Z]") {
+  KUBE_CONFIG = "dev"
+}
+
+// AWS Env Mapping
+if (env.ENVIRONMENT =~ "prod[a-z]*[A-Z]") {
+  AWS_ENV = "prod"
+} else if (env.ENVIRONMENT == "dr") {
+  AWS_ENV = "prod"
+} else if (env.ENVIRONMENT =~ "accp[a-z]*[A-Z]") {
+  AWS_ENV = "accp"
+} else if (env.ENVIRONMENT =~ "intg[a-z]*[A-Z]") {
+  AWS_ENV = "intg"
+} else if (env.ENVIRONMENT =~ "dev[a-z]*[A-Z]") {
+  AWS_ENV = "dev"
+}
+
+// Credential ID Resolution
+if (env.ENVIRONMENT =~ "prod[a-z]*[A-B]") {
+  CRED_ID = "sa_deploy_prod"
+} else if (env.ENVIRONMENT == "dr") {
+  CRED_ID = "sa_deploy_prod"
+} else if (env.ENVIRONMENT == "accp" || env.ENVIRONMENT =~ "accp[a-z]*[A-Z]") {
+  CRED_ID = "sa_deploy_accp"
+} else if (env.ENVIRONMENT == "intg" || env.ENVIRONMENT =~ "intg[a-z]*[A-Z]") {
+  CRED_ID = "sa_deploy_intg"
+} else if (env.ENVIRONMENT == "dev" || env.ENVIRONMENT =~ "dev[a-z]*[A-Z]") {
+  CRED_ID = "sa_deploy_dev"
+} else {
+  CRED_ID = "sa_deploy_null"
+}
+
+// Define gated environments
+CONTROLLED_ENVIRONMENTS = readJSON text: CONTROLLED_ENVIRONMENTS
+
+// Shared Helm Deploy Logic with Retry and Rollback
+def deployHelm(serviceDir, namespacePrefix) {
+  dir(serviceDir) {
+    try {
+      sh """
+        helm upgrade --timeout 6m30s --install --kube-context ${KUBE_CONFIG} --atomic \
+          -n ${namespacePrefix}-${ENVIRONMENT.toLowerCase()} \
+          --set tag=${TAG},environment=${ENVIRONMENT},active_profile=${ACTIVE_PROFILE},rhel_version=${RHEL_VERSION},region=${REGION} \
+          ${MICROSERVICES}-${ENVIRONMENT.toLowerCase()} -f ${MICROSERVICES}-values.yaml .
+      """
+    } catch (Exception e) {
+      echo "Helm upgrade failed. Attempting rollback and redeploy..."
+      sh "helm rollback ${MICROSERVICES}-${ENVIRONMENT.toLowerCase()} --kube-context ${KUBE_CONFIG} -n ${namespacePrefix}-${ENVIRONMENT.toLowerCase()} || true"
+      sleep(time: 10, unit: 'SECONDS')
+      sh """
+        helm upgrade --timeout 6m30s --install --kube-context ${KUBE_CONFIG} --atomic \
+          -n ${namespacePrefix}-${ENVIRONMENT.toLowerCase()} \
+          --set tag=${TAG},environment=${ENVIRONMENT},active_profile=${ACTIVE_PROFILE},rhel_version=${RHEL_VERSION},region=${REGION} \
+          ${MICROSERVICES}-${ENVIRONMENT.toLowerCase()} -f ${MICROSERVICES}-values.yaml .
+      """
+    }
+    sh "kubectl config use-context ${KUBE_CONFIG}"
+    sh "kubectl rollout restart deploy ${MICROSERVICES}-${ENVIRONMENT.toLowerCase()} -n ${namespacePrefix}-${ENVIRONMENT.toLowerCase()}"
+  }
+}
+
+pipeline {
+  agent {
+    node {
+      label "$NODE_LABEL"
+    }
+  }
+
+  stages {
+    stage('Deploy approval') {
+      steps {
+        script {
+          if (CONTROLLED_ENVIRONMENTS.contains(ENVIRONMENT)) {
+            emailext attachLog: false,
+              body: "Deployment ${JOB_BASE_NAME} to Controlled Environment ${ENVIRONMENT} requires approval. ${BUILD_URL}input",
+              replyTo: 'devops@venerableannuity.com',
+              subject: "Approval required ${JOB_BASE_NAME}",
+              to: APPROVER_LIST
+            input submitter: APPROVER_LIST, message: "This will deploy to the controlled environment $ENVIRONMENT"
+          } else if (LOWER_CONTROLLED_ENVIRONMENTS.contains(ENVIRONMENT)) {
+            emailext attachLog: false,
+              body: "Deployment ${JOB_BASE_NAME} requires approval. ${BUILD_URL}input",
+              replyTo: 'devops@venerableannuity.com',
+              subject: "Approval required ${JOB_BASE_NAME}",
+              to: LOWER_ENV_APPROVER_LIST
+            input submitter: LOWER_ENV_APPROVER_LIST, message: "This will deploy to the controlled environment $ENVIRONMENT"
+          } else {
+            echo "Deployment to ${ENVIRONMENT} does not require approval."
+          }
+        }
+      }
+    }
+
+    stage('Retrieve Helm Charts') {
+      steps {
+        git branch: "${BRANCH}",
+            credentialsId: 'f06cf8c1-1b3c-44e0-bc68-35e0f8a1a6fa',
+            url: 'https://github.tools.vaapps.net/EKS/ven-helm-charts.git'
+      }
+    }
+
+    stage('Deploy Microservice') {
+      steps {
+        withCredentials([
+          [$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: CRED_ID, secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']
+        ]) {
+          sh 'aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID'
+          sh 'aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY'
+          script {
+            def ns = ""
+            def dir = ""
+
+            if (MICROSERVICES.startsWith("lifecad-")) {
+              ns = "lifecad-services"; dir = ns
+            } else if (MICROSERVICES.startsWith("garwin-") || MICROSERVICES == "basdashboard") {
+              ns = "garwin-int-apps"; dir = ns
+            } else if (MICROSERVICES.startsWith("bas-rits") || MICROSERVICES.startsWith("nscc")) {
+              ns = "generic-internal-service"; dir = ns
+            } else if (MICROSERVICES.startsWith("annuity-")) {
+              ns = "annuity-services"; dir = ns
+            } else if (MICROSERVICES.contains("transaction") || MICROSERVICES.contains("claims") || MICROSERVICES.contains("newgen")) {
+              ns = "digtran-services"; dir = ns
+            } else if (MICROSERVICES.contains("portal") || MICROSERVICES.contains("email") || MICROSERVICES.contains("document") || MICROSERVICES.contains("audit") || MICROSERVICES.contains("sharepoint")) {
+              ns = "portal-services"; dir = ns
+            } else if (MICROSERVICES.contains("ultradoc")) {
+              ns = "document-services"; dir = ns
+            } else {
+              error "Unknown MICROSERVICES name. Please check the config."
+            }
+
+            lock(resource: "helm-deploy-${MICROSERVICES}-${ENVIRONMENT}") {
+              deployHelm(dir, ns)
+            }
+          }
+        }
+      }
+    }
+  }
+
+  post {
+    success {
+      emailext mimeType: 'text/html', attachLog: true, body: 'Deployment completed successfully', compressLog: false, recipientProviders: [requestor()], replyTo: 'devops@venerable.com', subject: '${BUILD_TAG}', to: "${SEND_NOTIFICATIONS}"
+    }
+    failure {
+      emailext mimeType: 'text/html', attachLog: true, body: 'Deployment failed', compressLog: false, recipientProviders: [requestor()], replyTo: 'devops@venerable.com', subject: '${BUILD_TAG}', to: "${SEND_NOTIFICATIONS}"
+    }
+    always {
+      cleanWs()
+    }
+  }
+}
