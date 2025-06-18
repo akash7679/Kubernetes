@@ -129,8 +129,13 @@ pipeline {
                       ${MICROSERVICES}-${env.ENVIRONMENT.toLowerCase()} -f ${MICROSERVICES}-values.yaml .
                   """
                 } catch (Exception e) {
-                  echo "Helm upgrade failed. Attempting rollback and redeploy..."
-                  sh "helm rollback ${MICROSERVICES}-${env.ENVIRONMENT.toLowerCase()} --kube-context ${env.KUBE_CONFIG} -n ${namespacePrefix}-${env.ENVIRONMENT.toLowerCase()} || true"
+                  echo "Helm upgrade failed. Printing history and performing safe rollback..."
+                  sh """
+                    helm history ${MICROSERVICES}-${env.ENVIRONMENT.toLowerCase()} -n ${namespacePrefix}-${env.ENVIRONMENT.toLowerCase()}
+                    REVISION=\$(helm history ${MICROSERVICES}-${env.ENVIRONMENT.toLowerCase()} -n ${namespacePrefix}-${env.ENVIRONMENT.toLowerCase()} | awk '\$8=="deployed"{print \$1}' | tail -n1)
+                    echo \"Rolling back to deployed revision: \$REVISION\"
+                    helm rollback ${MICROSERVICES}-${env.ENVIRONMENT.toLowerCase()} \$REVISION --kube-context ${env.KUBE_CONFIG} -n ${namespacePrefix}-${env.ENVIRONMENT.toLowerCase()}
+                  """
                   sleep(time: 10, unit: 'SECONDS')
                   sh """
                     helm upgrade --timeout 6m30s --install --kube-context ${env.KUBE_CONFIG} --atomic \
