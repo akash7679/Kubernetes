@@ -1,0 +1,51 @@
+🧭 High-Level Plan to Enable HPA Across EKS Namespaces (with Monitoring)
+Phase 1: Readiness Assessment
+✅ Ensure Metrics Server is deployed and operational (kubectl top pods)
+
+✅ Confirm Cluster Autoscaler is configured and node groups are tagged correctly
+
+✅ Identify target namespaces and workloads for autoscaling
+
+✅ Take backup of all existing Deployment YAMLs
+
+Phase 2: Baseline Configuration
+✅ Add CPU and memory requests and limits to all containers in targeted Deployments
+
+✅ Use conservative values initially (e.g., 200m CPU, 256Mi memory requests)
+
+✅ Ensure all Deployments are updated in-place without downtime
+
+Phase 3: HPA Creation
+✅ Create HPA objects per Deployment using API version autoscaling/v2
+
+✅ Configure dual metrics: averageUtilization for both CPU and memory
+
+✅ Set minReplicas: 1, maxReplicas: 2 to align with capacity policy
+
+Phase 4: Testing, Monitoring & Validation
+✅ Use kubectl get hpa and kubectl describe hpa to validate metrics and scaling thresholds
+
+✅ Monitor pod scale-out and scale-in events:
+
+kubectl get events -n <namespace> for scaling logs
+
+kubectl top pods for live resource usage
+
+kubectl get hpa to observe desired vs current replicas
+
+📈 Optional: Visualize scaling behavior using:
+
+CloudWatch Container Insights (for CPU/memory trends)
+
+Prometheus + Grafana dashboards
+
+Kubernetes Event Exporter to send scale events to Slack or ELK
+
+Phase 5: Continuous Optimization
+🔁 Review autoscaling efficiency post-deployment
+
+📊 Fine-tune resource requests using Goldilocks or VPA
+
+⏱️ Adjust stabilization windows or scale policies for better control
+
+🚀 Expand autoscaler implementation to more apps and environments
