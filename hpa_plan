@@ -1,0 +1,19 @@
+Phase	Task	Owner	Notes
+Pre-requisite	Ensure Metrics Server is installed and operational	DevOps	Run `kubectl top pods` to verify metrics availability
+Pre-requisite	Verify Cluster Autoscaler is enabled with correct ASG tags	Infra	Ensure ASGs have k8s.io/cluster-autoscaler/enabled tag
+Pre-requisite	Identify namespaces and workloads to apply HPA	Platform	Start with dev/intg/accp namespaces
+Pre-requisite	Backup current Deployment YAMLs	DevOps	Export YAMLs using `kubectl get deploy -o yaml`
+Configuration	Add CPU & memory requests/limits to containers in Deployments	DevOps	Mandatory for HPA to work with CPU/Memory
+Configuration	Use conservative resource values as starting point	DevOps	Example: 200m CPU, 256Mi memory as requests
+Configuration	Ensure updates are rolled out without pod disruption	DevOps	Use `kubectl rollout status` to monitor updates
+HPA Deployment	Create HPA manifests using autoscaling/v2 API	DevOps	HPA kind: HorizontalPodAutoscaler
+HPA Deployment	Configure CPU and memory average utilization thresholds	DevOps	Example: CPU 60%, Memory 70%
+HPA Deployment	Set minReplicas to 1 and maxReplicas to 2	DevOps	Prevent over-scaling and unnecessary costs
+Monitoring & Validation	Run `kubectl get hpa` and `describe hpa` for status check	DevOps	Check current vs desired replicas
+Monitoring & Validation	Watch scaling events via `kubectl get events`	DevOps	Capture messages like 'Scaled up/down replica set'
+Monitoring & Validation	Monitor `kubectl top pods` for live metrics	DevOps	Validate usage under load scenarios
+Monitoring & Validation	Use CloudWatch, Prometheus or Grafana for visual tracking	DevOps	Cloud-native observability recommended
+Optimization	Analyze scale behavior post-deployment	DevOps	Ensure scaling doesn't cause instability
+Optimization	Use tools like Goldilocks or VPA for tuning requests/limits	DevOps	Review namespace-wide suggestions
+Optimization	Tweak scale-in/out policies if needed	DevOps	Modify scale policies (e.g. stabilizationWindowSeconds)
+Optimization	Expand HPA to other namespaces and workloads	DevOps	Apply proven pattern across environments
