@@ -1,0 +1,81 @@
+Root Cause Analysis (RCA) Report
+
+Title: GitHub PROD Upgrade Issue (CHG0042478)
+Date: 20th June 2025
+
+Event Summary:
+On 20th June 2025 at 9:00 PM EST, during the pre-requisite checks before a scheduled GitHub upgrade, it was observed that replication on the GitHub DR (Disaster Recovery) server was not functioning. This led to halting the upgrade process.
+
+Incident Details:
+System Affected: GitHub PROD and DR Environment
+
+Primary Symptom: GitHub DR server replication failed after volume extension and reboot.
+
+Detected At: 10:00 PM EST, 20th June 2025
+
+Reported By: Internal Pre-Upgrade Checklist
+
+Duration of Impact: ~6 hours
+
+Impact: GitHub upgrade halted; GitHub DR server not in sync, posing risk to production stability.
+
+Root Cause:
+Post volume extension on the DR server, replication processes (MySQL, Redis, Elasticsearch, git-hooks) failed to reinitialize correctly after the reboot. Additionally, consul services failed to start due to port binding issues, causing GitHub replication to remain inactive. This was compounded by misaligned volume partitions that prevented proper replication setup.
+
+Contributing Factors:
+Volume extension was not followed by validation of replication service health.
+
+Lack of automated checks for service restarts post-reboot.
+
+Port 8500 for consul showed repeated connection refusals.
+
+Root volume restoration required from backup, indicating volume mismatch issues.
+
+Misconfiguration or delay in redeploying GitHub replication containers.
+
+Error Log Highlights:
+MySQL replication is not setup
+
+redis replication is not setup
+
+elasticsearch replication is not setup
+
+curl: (7) Failed to connect to github-tools-vaapps-net-replica-anaijutkvfi port 4646
+
+Replica Consul is not Active
+
+Connection refused on port 8500
+
+Timeline of Events (EST):
+Time	Activity
+2:00 AM	Cloudops completed volume extension as per RITM0140575.
+12:00 PM	DR server rebooted post-extension; replication still inactive.
+2:30 PM	Follow-up initiated; issue still being worked on.
+9:00 PM	Pre-upgrade checks confirmed green status.
+10:00 PM	AMI backup confirmed; replication on DR server failed.
+10:55 PM	Ticket raised with GitHub Support (Ticket 3502234).
+12:22 AM	Discussion with GitHub support and CloudOps L2; identified volume partition misalignment.
+1:30 AM	CloudOps restored DR volume from previous backup.
+2:30 AM	Replication still failed post-restore.
+3:30 AM	Further troubleshooting; rebooted DR server again and replication enabled.
+4:00 AM	Upgrade activity officially called off.
+4:10 AM	Maintenance mode disabled; alerts re-enabled.
+
+Resolution:
+DR server was restored from earlier volume snapshot.
+
+Consul and other services were validated post-reboot.
+
+Replication was re-enabled after successful service restart.
+
+GitHub upgrade deferred pending detailed validation.
+
+Preventive Actions:
+Automation: Implement post-reboot service validation scripts for critical replicas (MySQL, Redis, etc.).
+
+Monitoring: Add port monitoring and alerts for consul (port 8500) and replication components.
+
+Checklist Enhancement: Enhance upgrade pre-checks to verify replication state on all replica nodes.
+
+Documentation: Standard operating procedures (SOP) to include validation steps post-volume operations.
+
