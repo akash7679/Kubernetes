@@ -1,0 +1,64 @@
+📘 Migrating Fluent Bit to YAML: Turning a Mandate into an Opportunity
+Why we’re doing this
+Fluent Bit has announced the deprecation of classic .conf-style configurations starting in version 3.2, with full support ending by December 2025. This gives us a clear timeline — and a perfect opportunity — to modernize how we manage log collection across our Kubernetes clusters.
+
+Right now, we rely on manually managed INI-style config files and static @INCLUDE directives. While this setup has served us well, it doesn’t scale with our growing application footprint. Every new workload that needs logging requires manual edits, redeployments, and extra overhead.
+
+By migrating to YAML-based configuration, we can transition Fluent Bit from a manually managed logging agent to a fully automated, declarative, and GitOps-compatible system — one that’s easier to operate, integrate, and scale.
+
+🚀 What this enables
+1. We stay ahead of the curve
+Classic config support ends in 2025. Migrating early gives us control over the process — we can test, iterate, and deploy at our own pace, without racing against a deprecation clock.
+
+2. More readable, structured configuration
+YAML makes our log pipeline easier to understand and manage. Inputs, filters, outputs — all defined in one cohesive structure. No more chasing down includes or deciphering flat config files.
+
+3. Automated onboarding of new apps
+Instead of manually updating config files for each app, we can auto-discover new workloads using labels (e.g., logging/enabled=true) and dynamically generate the required input blocks. That’s zero-touch log onboarding.
+
+4. Built for GitOps and CI/CD
+YAML fits perfectly with our GitOps approach. We can manage Fluent Bit config like any other Kubernetes resource — with version control, PR reviews, automated testing, and continuous deployment.
+
+5. Stronger observability and governance
+With structured config, we can:
+
+Validate settings before deployment
+
+Enforce consistency through policies (e.g., OPA, Kyverno)
+
+Maintain better auditability and compliance
+
+🔁 What will change (and improve)
+Today (Classic Config)	Tomorrow (YAML Config)
+.conf with flat [INPUT], [OUTPUT] blocks	Hierarchical YAML with clearly defined pipelines
+Manually maintained @INCLUDEs	Modular, auto-generated input definitions
+Manual app onboarding	Label-driven, automated discovery
+Config updates require restarts	ConfigMap checksums trigger rolling updates
+Difficult to test or lint	YAML supports schema validation and linters
+Not GitOps-friendly	Native integration with GitOps, Helm, Kustomize
+
+🛠️ How we’ll get there
+Phase 1: Establish the YAML baseline
+Convert all existing .conf and @INCLUDEs into a unified fluent-bit.yaml
+
+Validate in a test cluster running Fluent Bit v2.x or higher
+
+Phase 2: Integrate with GitOps workflows
+Store the new YAML config in version control
+
+Parameterize for multiple environments via Helm or CI/CD pipelines
+
+Phase 3: Enable automation
+Build a discovery script or controller to scan Kubernetes namespaces or pods for logging labels
+
+Generate YAML input blocks dynamically and apply them as ConfigMap updates
+
+Phase 4: Roll out and standardize
+Gradually roll out the new config across environments
+
+Use checksum annotations to safely trigger Fluent Bit restarts
+
+Define validation and policy enforcement using tools like kubeval, conftest, or Kyverno
+
+💡 Final thought
+This migration isn’t just about avoiding deprecation. It’s about evolving our observability stack to be smarter, faster, and more aligned with the way we run modern infrastructure. By moving to YAML now, we’re investing in a cleaner, automated, and future-ready approach to logging — one that scales with our teams, our systems, and our ambitions.
