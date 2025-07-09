@@ -1,17 +1,9 @@
-We’re proposing to set the ReplicaSet to 1 for a few services in the EKS cluster. The corresponding memory limits per pod are already shared in the Excel sheet — please take a look when you get a chance.
+Hi Ashish,
 
-To support this proposal, I’ve also included a snapshot from CloudWatch Metrics that shows the NewFlowCount_TLS metric for our NLB. This metric gives us an idea of how many new TCP connections are being handled — including both actual application requests and health check probes from our monitoring stack.
+Thanks for the note and for the trust you and Steve have placed in my recommendation.
 
-Here’s a quick breakdown of the key values shown in the chart:
+I’m glad Shan can continue in the middleware team, and I’ll make sure we stay on top of things—especially when it comes to avoiding any critical incidents. I completely agree that we need a solid process in place, and I’ll sync up with Ameer to start drafting something that addresses the anomalies we discussed.
 
-Min: The lowest number of connections seen during the selected time window
+Appreciate your support, and I’ll keep you posted as we make progress on this.
 
-Max: The peak number of connections observed
-
-Sum: Total number of new connections (i.e., requests + health checks) over the time period
-
-Average: The average connections during the timeframe
-
-Each row in the table corresponds to a different NLB target (Ingress or App Pod) across AZs, which helps us see how traffic is distributed. Based on the current numbers — with most targets seeing between ~54 and ~98 connections — we believe running a single replica should be sufficient given the memory limits we’re planning.
-
-Let me know if anything looks off or if you'd like to discuss this further.
+Best,
