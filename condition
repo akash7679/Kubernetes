@@ -1,3 +1,23 @@
+def garwinIntApps = [
+    "garwin-agent-services",
+    "garwin-contract-services",
+    "garwin-contractentity-services",
+    "garwin-contractinfo-services",
+    "garwin-data-services",
+    "garwin-fin-services",
+    "garwin-financial-services",
+    "garwin-goodorder-service",
+    "garwin-maintenance-services",
+    "garwin-quote-services",
+    "garwin-report-services",
+    "garwin-tranprocess-services",
+    "garwin-validation-services"
+]
+
+if (garwinIntApps.contains(MICROSERVICES)) {
+    ns = "garwin-int-apps"; dir = ns
+
+
 def garwinServices = [
     "garwin-agent-services",
     "garwin-contract-services",
