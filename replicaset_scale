@@ -1,0 +1,60 @@
+#!/bin/bash
+
+# ----------------------------
+# Scale down Kubernetes deployments to 1 replica
+# Excludes deployments in namespaces with 'nginx' or 'common' in name
+# ----------------------------
+
+# === CONFIGURATION ===
+ENV_KEYWORD="dev"       # Set this to filter namespace (e.g., dev, intg, accp)
+DRY_RUN=false            # Set to true to only print what would be done
+LOG_FILE="scale_down.log"
+TIMESTAMP=$(date "+%Y-%m-%d_%H-%M-%S")
+> "$LOG_FILE"
+
+echo "[INFO] Starting scale down at $TIMESTAMP" | tee -a "$LOG_FILE"
+echo "[INFO] Filtering namespaces containing: $ENV_KEYWORD" | tee -a "$LOG_FILE"
+
+# === VALIDATION ===
+if ! command -v kubectl &> /dev/null; then
+    echo "[ERROR] kubectl not found. Please install and configure access to the cluster." | tee -a "$LOG_FILE"
+    exit 1
+fi
+
+# === MAIN LOGIC ===
+
+# 1. Get all namespaces matching the environment keyword and excluding 'nginx' or 'common'
+namespaces=$(kubectl get ns --no-headers -o custom-columns=":metadata.name" | \
+  grep -i "$ENV_KEYWORD" | grep -ivE 'nginx|common')
+
+if [ -z "$namespaces" ]; then
+    echo "[WARN] No namespaces found with keyword '$ENV_KEYWORD' excluding nginx/common" | tee -a "$LOG_FILE"
+    exit 0
+fi
+
+for ns in $namespaces; do
+  echo "[INFO] Processing namespace: $ns" | tee -a "$LOG_FILE"
+
+  # 2. Get all deployments in that namespace
+  deployments=$(kubectl get deploy -n "$ns" --no-headers -o custom-columns=":metadata.name")
+  
+  if [ -z "$deployments" ]; then
+    echo "[INFO] No deployments found in $ns" | tee -a "$LOG_FILE"
+    continue
+  fi
+
+  for deploy in $deployments; do
+    echo "[ACTION] Scaling down deployment '$deploy' in namespace '$ns' to 1 replica" | tee -a "$LOG_FILE"
+    
+    if [ "$DRY_RUN" = false ]; then
+      kubectl scale deploy "$deploy" -n "$ns" --replicas=1 &>> "$LOG_FILE"
+      if [ $? -eq 0 ]; then
+        echo "[SUCCESS] Scaled '$deploy' in '$ns'" | tee -a "$LOG_FILE"
+      else
+        echo "[ERROR] Failed to scale '$deploy' in '$ns'" | tee -a "$LOG_FILE"
+      fi
+    fi
+  done
+done
+
+echo "[INFO] Scale-down process completed." | tee -a "$LOG_FILE"
